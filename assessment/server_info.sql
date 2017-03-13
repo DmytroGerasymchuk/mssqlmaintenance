@@ -444,7 +444,7 @@ from
 		inner join msdb.dbo.sysmail_account SMA on SMPA.account_id=SMA.account_id
 		left join msdb.dbo.sysmail_principalprofile SMPP on SMP.profile_id=SMPP.profile_id
 where
-	SMP.name='DBMail'
+	SMP.name='MaintDB-MailProfile'
 
 if @@rowcount<>1
 	begin
@@ -457,16 +457,16 @@ if @@rowcount<>1
 -- Ausgabe
 
 select
-	@RCAllowed as '[4.1] rem. conn. allowed',
-	@RCTimeOut as '[4.1] rem. query timeout (s)',
-	@SAPolicyChecking as '[4.2] sa check_policy',
-	coalesce(@NumberProtocols, 6) as '[4.3] # of protocols',
-	@jobhistory_max_rows as '[4.4] max. job history log size',
-	@jobhistory_max_rows_per_job as '[4.4] max. job history rows per job'
+	@RCAllowed as '[ibp01] rem. conn. allowed',
+	@RCTimeOut as '[ibp02] rem. query timeout (s)',
+	@SAPolicyChecking as '[ibp03] sa check_policy',
+	coalesce(@NumberProtocols, 6) as '[ibp04] # of protocols',
+	@jobhistory_max_rows as '[ibp05] max. job history log size',
+	@jobhistory_max_rows_per_job as '[ibp06] max. job history rows per job'
 
 select
-	@MailProfileCount as '[4.6] profile count',
-	left(@MailAccountName, 40) as '[4.6] mail account',
-	left(@MailAccountMail, 40) as '[4.6] mail address',
-	@MailProfileIsPublic as '[4.6] public profile',
-	@MailProfileIsDefault as '[4.6] default profile'
+	@MailProfileCount as '[ibp07] profile count',
+	left(@MailAccountName, 40) as '[ibp08] mail account',
+	left(@MailAccountMail, 40) as '[ibp09] mail address',
+	@MailProfileIsPublic as '[ibp10] public profile',
+	@MailProfileIsDefault as '[ibp11] default profile'
