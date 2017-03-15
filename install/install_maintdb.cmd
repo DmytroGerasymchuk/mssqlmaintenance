@@ -8,7 +8,7 @@ set ModulesPath=%~d0%~p0..\modules
 set DefaultTargetInstance=(local)
 set MaintDBName=MaintDB
 set JobLogDir=D:\%MaintDBName%\JobLogs
-set DBAOperatorMail=sqldba@sandbox.com
+set DefaultDBAOperatorMail=sqldba@sandbox.com
 
 echo =============================================
 echo Installation of MSSQL*Maintenance SQL Scripts
@@ -17,6 +17,10 @@ echo =============================================
 echo.
 set /p TargetInstance=Target instance [%DefaultTargetInstance%]:
 if [%TargetInstance%]==[] set TargetInstance=%DefaultTargetInstance%
+
+echo.
+set /P DBAOperatorMail=DBA operator mail [%DefaultDBAOperatorMail%]:
+if [%DBAOperatorMail%]==[] set DBAOperatorMail=%DefaultDBAOperatorMail%
 
 echo.
 echo Choose Authentication:
@@ -118,5 +122,26 @@ pause
 sqlcmd -S %TargetInstance% %AuthOption% -b -i "%InstPath%prerequisites.sql"
 if %errorlevel% neq 0 goto end
 
+echo.
+echo ======================== Operators ========================
+sqlcmd -S %TargetInstance% %AuthOption% -b -i "%InstPath%operators.sql"
+if %errorlevel% neq 0 goto end
+
+echo.
+echo ======================== Modules ========================
+for /f "usebackq eol=# tokens=1,2 delims==" %%a in (`type "%ModulesPath%\config.ini"`) do call :process_one_module "%%a" "%%b"
+
+echo.
+echo %date% %time% All finished.
+
 :end
 pause
+exit
+
+:process_one_module
+if [%~2] neq [1] goto :eof
+echo %date% %time% BEGIN module installation: [%~1]
+sqlcmd -S %TargetInstance% %AuthOption% -b -i "%ModulesPath%\%~1.sql"
+if %errorlevel% neq 0 goto end
+echo %date% %time% END module installation: [%~1]
+goto :eof
