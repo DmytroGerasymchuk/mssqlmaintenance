@@ -167,10 +167,10 @@ begin
 					SELECT
 						SessionSpaceUsage.session_id,
 				
-						UserObjectsAllocPageCount		= SessionSpaceUsage.user_objects_alloc_page_count + isnull( SUM (TaskSpaceUsage.user_objects_alloc_page_count), 0) ,
-						UserObjectsDeallocPageCount		= SessionSpaceUsage.user_objects_dealloc_page_count + isnull( SUM (TaskSpaceUsage.user_objects_dealloc_page_count), 0) ,
-						InternalObjectsAllocPageCount	= SessionSpaceUsage.internal_objects_alloc_page_count + isnull( SUM (TaskSpaceUsage.internal_objects_alloc_page_count), 0) ,
-						InternalObjectsDeallocPageCount	= SessionSpaceUsage.internal_objects_dealloc_page_count + isnull( SUM (TaskSpaceUsage.internal_objects_dealloc_page_count), 0)
+						UserObjectsAllocPageCount		= SessionSpaceUsage.user_objects_alloc_page_count + isnull(sum(TaskSpaceUsage.user_objects_alloc_page_count), 0) ,
+						UserObjectsDeallocPageCount		= SessionSpaceUsage.user_objects_dealloc_page_count + isnull(sum(TaskSpaceUsage.user_objects_dealloc_page_count), 0) ,
+						InternalObjectsAllocPageCount	= SessionSpaceUsage.internal_objects_alloc_page_count + isnull(sum(TaskSpaceUsage.internal_objects_alloc_page_count), 0) ,
+						InternalObjectsDeallocPageCount	= SessionSpaceUsage.internal_objects_dealloc_page_count + isnull(sum(TaskSpaceUsage.internal_objects_dealloc_page_count), 0)
 					FROM
 						sys.dm_db_session_space_usage AS SessionSpaceUsage
 							left join sys.dm_db_task_space_usage AS TaskSpaceUsage
@@ -279,22 +279,6 @@ begin
 end
 go
 
-execute base.usp_prepare_object_creation 'tools', 'udf_get_operator_mail'
-go
-
-create function tools.udf_get_operator_mail(@BaseConfigValueName varchar(255))
-returns varchar(255) as
-begin
-
-	return
-		(
-			select email_address from msdb.dbo.sysoperators where name=
-				(select strValue from base.tblConfigValue where strConfigValueName=@BaseConfigValueName)
-		)
-
-end
-go
-
 execute base.usp_prepare_object_creation 'tools', 'usp_get_vlf_number'
 go
 
@@ -321,7 +305,10 @@ begin
 		Parity sql_variant,
 		CreateLSN sql_variant)
 
-	-- determine SQL Server version; if 2012 or higher, use @LogInfo2012 table!
+	-- DBCC output format has changed since SQL Server 2012
+	-- (+ new field RecoveryUnitId). Therefore, server version
+	-- should be determined and corresponding output table used.
+
 	declare
 		@SrvVerS varchar(255),
 		@SrvVerI integer
@@ -343,6 +330,281 @@ begin
 			return @@rowcount
 		end
 	set nocount off
+
+end
+go
+
+execute base.usp_prepare_object_creation 'tools', 'usp_html_from_query'
+go
+
+create procedure tools.usp_html_from_query
+	@Query varchar(max),
+	@HTML varchar(max) output,
+	@QueryIsXmlResult bit = 0 as
+begin
+
+	-- "CSS"-Definitionen für Ausgabe der HTML-Tabelle
+	declare
+		@HeaderCellAdd varchar(max) = ' style="border: 1px solid black; text-align: left"',
+		@NormalCellAdd varchar(max) = ' style="border: 1px solid black; font-size: x-small"'
+
+	-- Parsing-Definitionen fürs Auslesen der XML-Inhalte aus String
+	declare
+		@RowStartContent varchar(max) = 'row xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+	declare
+		@RowStartSignature varchar(max) = '<' + @RowStartContent + '>',
+		@XSINilPattern varchar(max) = '% xsi:nil="true"/'
+
+	-- ggf. Abfrage ausführen (falls das Ergebnis noch nicht als XML in String-Form bereits vorliegt)
+	-- und HTML-konform encodieren und formatieren
+
+	declare
+		@QResult varchar(max)
+
+	if @QueryIsXmlResult=convert(bit, 0)
+		begin
+			declare
+				@QResultTab table (Value xml)
+
+			declare
+				@Cmd varchar(max)
+
+			set @Cmd = @Query + ' for xml raw, type, elements xsinil'
+
+			set nocount on
+			insert into @QResultTab execute (@Cmd)
+			set nocount off
+
+			select @QResult = convert(varchar(max), Value) from @QResultTab
+		end
+	else
+		set @QResult = @Query
+
+	-- Ergebnis parsen!
+
+	declare
+		@StartPos integer,
+		@Loc1 integer,
+		@Loc2 integer,
+		@TagText varchar(max)
+
+	-- um Header-Zeile der Tabelle zu bauen, zuerst die Namen
+	-- der auftretenden Felder extrahieren, dafür die erste Zeile
+	-- analysieren
+
+	declare
+		@FirstRow varchar(max),
+		@FirstSection varchar(max) = ''
+
+	set @Loc1 = charindex(@RowStartSignature, @QResult)
+	if @Loc1 <> 0
+		begin
+			set @Loc2 = charindex('</row>', @QResult, @Loc1 + len(@RowStartSignature))
+			 -- zuerst komplette erste Zeile bis auf "</row>"-Tag am Ende auslesen
+			set @FirstRow = substring(@QResult, @Loc1, @Loc2 - @Loc1)
+			-- dann "<row>"-Tag am Anfang abschneiden
+			set @FirstRow = substring(@FirstRow, len(@RowStartSignature) + 1, len(@FirstRow) - len(@RowStartSignature))
+
+			set @FirstSection = '<tr>'
+
+			set @StartPos = 1
+			while @StartPos < len(@FirstRow)
+				begin
+					set @Loc1 = @StartPos -- "<"
+					set @Loc2 = charindex('>', @FirstRow, @Loc1 + 1)
+					set @TagText = substring(@FirstRow, @Loc1 + 1, @Loc2 - @Loc1 - 1)
+
+					declare @HasNil bit
+
+					if @TagText like @XSINilPattern
+						begin
+							set @TagText = left(@TagText, len(@TagText) - 16)
+							set @HasNil = convert(bit, -1)
+						end
+					else
+						set @HasNil = convert(bit, 0)
+
+					while patindex('%[_]x00__[_]%', @TagText) > 0
+						begin
+							declare	@TagHexChar char(2) = substring(@TagText, patindex('%[_]x00__[_]%', @TagText) + 4, 2)
+							declare @TagChar char(1) = char(convert(integer, convert(varbinary, @TagHexChar, 2)))
+							set @TagText = replace(@TagText, '_x00' + @TagHexChar + '_', @TagChar)
+						end
+
+					set @FirstSection = @FirstSection + '<th' + @HeaderCellAdd + '>' + @TagText + '</th>'
+
+					if @HasNil = convert(bit, -1)
+						-- wenn leeres Element, dann sofort zum nächsten Element "einfach so" übergehen
+						-- durch einfaches Inkrement der Position im String
+						set @StartPos = @Loc2 + 1
+					else
+						-- ansonsten muss der Anfang des nächsten Elements gesucht werden
+						set @StartPos = charindex('>', @FirstRow, @Loc2 + 1) + 1
+				end
+
+			set @FirstSection = @FirstSection + '</tr>'
+		end
+
+	-- die Namen der Elemente in der String-Darstellung von XML durch Tags "tr" bzw. "td" ersetzen
+
+	set @StartPos = 1
+	set @Loc1 = charindex('<', @QResult, @StartPos)
+
+	while @Loc1 <> 0
+		begin
+			declare
+				@EndTagShift integer,
+				@NormalizedTagText varchar(max),
+				@NewTagText varchar(max)
+
+			set @Loc2 = charindex('>', @QResult, @Loc1 + 1)
+			set @TagText = substring(@QResult, @Loc1 + 1, @Loc2 - @Loc1 - 1)
+			set @EndTagShift = case when left(@TagText, 1) = '/' then 1 else 0 end
+
+			set @NormalizedTagText = substring(@TagText, 1 + @EndTagShift, len(@TagText) - @EndTagShift)
+
+			set @NewTagText =
+				case @EndTagShift when 1 then '/' else '' end +
+				case @NormalizedTagText
+					when @RowStartContent then 'tr' -- es ist: Anfang der Zeile!
+					when 'row' then 'tr'  -- es ist: Ende der Zeile!
+					else 'td' + case @EndTagShift when 1 then '' else @NormalCellAdd end end +
+				case when @TagText like @XSINilPattern then ' /' else '' end
+
+			set @QResult = stuff(@QResult, @Loc1 + 1, len(@TagText), @NewTagText)
+
+			set @StartPos = @Loc1 + len(@NewTagText) + 1 + 1
+			set @Loc1 = charindex('<', @QResult, @StartPos)
+		end
+
+	-- Fertig, Ergebnis zusammen setzen und zurück liefern
+
+	set @HTML =
+		'<table style="width: 100%; border-collapse: collapse">' +
+		@FirstSection +
+		@QResult +
+		'</table>'
+
+end
+go
+
+execute base.usp_prepare_object_creation 'tools', 'usp_disk_space_check'
+go
+
+create procedure tools.usp_disk_space_check
+	@SendMail bit = 1 as
+begin
+
+	declare
+		@WarningPct numeric(10, 2) = 80,
+		@ErrorPct   numeric(10, 2) = 90
+
+	declare	@OutTab table (strOutput varchar(max))
+
+	declare @RepTab table (
+		strVolumeName varchar(max),
+		strVolumeLabel varchar(max),
+		numCapacityGBytes numeric(10, 4),
+		numFreeSpaceGBytes numeric(10, 4),
+		numFilledPct numeric(10, 2),
+		numWarningPct numeric(10, 2),
+		numErrorPct numeric(10, 2),
+		strStateCode varchar(20)
+	)
+
+	declare
+		@RetRes integer,
+		@ErrNo integer,
+		@XResult xml
+
+	declare @BulkCmd nvarchar(max)
+
+	set @BulkCmd =
+		'select @XResult = T.C ' +
+		'from openrowset(bulk ''' + (select strValue from base.tblConfigValue where strConfigValueName='tools.wmi_xml_dir') + '\volumes.xml'', single_nclob) T(C)'
+	execute @RetRes = sp_executesql @BulkCmd, N'@XResult xml output', @XResult output
+	set @ErrNo = @@error
+			
+	if @RetRes<>0 or @ErrNo<>0
+		begin
+			raiserror('Error encountered during call to sp_executesql with openrowset bulk single_nclob.', 16, 1)
+			return
+		end
+
+	set nocount on
+	insert into @RepTab
+	select
+		Aux2.*,
+		case
+			when numFilledPct>=numErrorPct then 'ERROR'
+			when numFilledPct>=numWarningPct and numFilledPct<numErrorPct then 'WARNING'
+			else 'OK'
+		end as strStateCode
+	from (
+		select
+			Aux1.*,
+			convert(numeric(10, 2), (1 - (numFreeSpaceGBytes / numCapacityGBytes)) * 100) as numFilledPct,
+			coalesce(BT.numWarningPct, @WarningPct) as numWarningPct,
+			coalesce(BT.numErrorPct, @ErrorPct) as numErrorPct
+		from (
+			select
+				T.C.value('./PROPERTY[@NAME="Name"][1]', 'varchar(max)') as strVolumeName,
+				coalesce(nullif(T.C.value('./PROPERTY[@NAME="Label"][1]', 'varchar(max)'), ''), '???') as strVolumeLabel,
+				convert(numeric(10, 4), T.C.value('./PROPERTY[@NAME="Capacity"][1]',  'decimal') / 1024 / 1024 / 1024) as numCapacityGBytes,
+				convert(numeric(10, 4), T.C.value('./PROPERTY[@NAME="FreeSpace"][1]', 'decimal') / 1024 / 1024 / 1024) as numFreeSpaceGBytes
+			from
+				@XResult.nodes('/COMMAND/RESULTS/CIM/INSTANCE') as T(C)
+		) Aux1
+			left join base.tblVolumeBound BT on Aux1.strVolumeName=BT.strVolumeName
+	) Aux2
+	set nocount off
+
+	select
+		convert(varchar(20), left(strVolumeName, 20)) as [Disk Volume],
+		convert(varchar(20), left(strVolumeLabel, 20)) as [Label],
+		convert(varchar(10), numCapacityGBytes) as [Capacity GB],
+		convert(varchar(10), numFreeSpaceGBytes) as [Free GB],
+		convert(varchar(10), numFilledPct) as [Filled %],
+		convert(varchar(10), numWarningPct) as [Warning %],
+		convert(varchar(10), numErrorPct) as [Error %],
+		convert(varchar(10), left(strStateCode, 10)) as [State Code]
+	from @RepTab RT
+	order by strVolumeName
+
+	if exists (select 1 from @RepTab where strStateCode<>'OK')
+		begin
+			print 'There are problems.'
+			if @SendMail=convert(bit, 0)
+				print 'Mail will not be sent, because @SendMail was set to 0.'
+			else
+				begin
+					declare
+						@MailProfile varchar(255) = base.udf_get_mail_profile(),
+						@OperatorMail varchar(255) = base.udf_get_operator_mail('tools.notify_operator'),
+						@PreparedQueryResult varchar(max) = convert(varchar(max), (
+							select
+								strVolumeName as [Disk Volume], strVolumeLabel as [Label],
+								numCapacityGBytes as [Capacity GB], numFreeSpaceGBytes as [Free GB], numFilledPct as [Filled %],
+								numWarningPct as [Warning %], numErrorPct as [Error %],
+								strStateCode as [State Code]
+							from @RepTab
+							where strStateCode<>'OK'
+							order by strVolumeName
+							for xml raw, type, elements xsinil)),
+						@Html varchar(max)
+
+					execute tools.usp_html_from_query @PreparedQueryResult, @Html output, 1
+
+					execute msdb.dbo.sp_send_dbmail
+						@profile_name=@MailProfile,
+						@recipients=@OperatorMail,
+						@subject='Disk Space Check Alert',
+						@body_format='html',
+						@body=@Html
+				end
+		end
+	else
+		print 'All OK.'
 
 end
 go

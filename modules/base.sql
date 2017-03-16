@@ -37,10 +37,15 @@ go
 set nocount on
 insert into base.tblConfigValue (strConfigValueName, strValue)
 	values
+		('tools.wmi_xml_dir', '$(WmiXmlDir)'),
+		
 		('maint.max_log_size', '1000'),
 		('maint.history_retention', '4'),
 		('maint.backup_path', '$$$NOTSET$$$'),
 		('maint.backup_retention_days', '4'),
+
+		('base.mail_profile', db_name() + '-MailProfile'),
+
 		('maint.notify_operator', db_name() + '-DBA'),
 		('tools.notify_operator', db_name() + '-DBA'),
 		('pol.notify_operator', db_name() + '-DBA')
@@ -281,6 +286,34 @@ begin
 		print convert(varchar, getdate()) + ' Error encountered!'
 		raiserror(@EM, 16, 1)
 	end catch
+
+end
+go
+
+execute base.usp_prepare_object_creation 'base', 'udf_get_mail_profile'
+go
+
+create function base.udf_get_mail_profile()
+returns varchar(255) as
+begin
+
+	return (select strValue from base.tblConfigValue where strConfigValueName='base.mail_profile')
+
+end
+go
+
+execute base.usp_prepare_object_creation 'base', 'udf_get_operator_mail'
+go
+
+create function base.udf_get_operator_mail(@BaseConfigValueName varchar(255))
+returns varchar(255) as
+begin
+
+	return
+		(
+			select email_address from msdb.dbo.sysoperators where name=
+				(select strValue from base.tblConfigValue where strConfigValueName=@BaseConfigValueName)
+		)
 
 end
 go

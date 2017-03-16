@@ -1,9 +1,12 @@
 declare @RetRes integer
 
 execute @RetRes = master.dbo.xp_create_subdir '$(JobLogDir)'
-
 if @RetRes<>0
-	raiserror('master.dbo.xp_create_subdir failed.', 16, 1)
+	raiserror('master.dbo.xp_create_subdir for JobLogDir failed.', 16, 1)
+
+execute @RetRes = master.dbo.xp_create_subdir '$(WmiXmlDir)'
+if @RetRes<>0
+	raiserror('master.dbo.xp_create_subdir for WmiXmlDir failed.', 16, 1)
 go
 
 if not exists (select 1 from msdb.dbo.sysmail_profile where name='$(MaintDBName)-MailProfile')

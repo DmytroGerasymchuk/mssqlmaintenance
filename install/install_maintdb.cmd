@@ -8,6 +8,7 @@ set ModulesPath=%~d0%~p0..\modules
 set DefaultTargetInstance=(local)
 set MaintDBName=MaintDB
 set JobLogDir=D:\%MaintDBName%\JobLogs
+set WmiXmlDir=D:\%MaintDBName%\WMI
 set DefaultDBAOperatorMail=sqldba@sandbox.com
 
 echo =============================================
@@ -58,6 +59,7 @@ echo.
 echo To server............: %TargetInstance%
 echo MaintDB Name.........: %MaintDBName%
 echo Job Log Dir..........: %JobLogDir%
+echo WMI XML Dir..........: %WmiXmlDir%
 echo DBA Operator Mail....: %DBAOperatorMail%
 echo Authentication option: %AuthOption%
 echo.
@@ -123,8 +125,10 @@ sqlcmd -S %TargetInstance% %AuthOption% -b -i "%InstPath%prerequisites.sql"
 if %errorlevel% neq 0 goto end
 
 echo.
-echo ======================== Operators ========================
+echo ======================== Operators and Alerts ========================
 sqlcmd -S %TargetInstance% %AuthOption% -b -i "%InstPath%operators.sql"
+if %errorlevel% neq 0 goto end
+sqlcmd -S %TargetInstance% %AuthOption% -b -i "%InstPath%alerts.sql"
 if %errorlevel% neq 0 goto end
 
 echo.
