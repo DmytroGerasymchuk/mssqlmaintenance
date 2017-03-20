@@ -7,15 +7,6 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-if exists (select * from sys.schemas where name='tools')
-	print 'tools schema already exists.'
-else
-	begin
-		print 'tools schema does not exist - creating...'
-		execute ('create schema tools')
-	end
-go
-
 execute base.usp_prepare_object_creation 'tools', 'usp_db_info'
 go
 
@@ -609,5 +600,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'tools', 1, 0
+execute base.usp_update_module_info 'tools', 1, 1
 go

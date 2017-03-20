@@ -4,11 +4,11 @@ setlocal
 
 set InstPath=%~d0%~p0
 set ModulesPath=%~d0%~p0..\modules
+set JobsPath=%~d0%~p0..\jobs
 
 set DefaultTargetInstance=(local)
 set MaintDBName=MaintDB
-set JobLogDir=D:\%MaintDBName%\JobLogs
-set WmiXmlDir=D:\%MaintDBName%\WMI
+set MaintDBDiskRoot=D:\%MaintDBName%
 set DefaultDBAOperatorMail=sqldba@sandbox.com
 
 echo =============================================
@@ -47,6 +47,10 @@ powershell -Command "$newY = $Host.UI.RawUI.CursorPosition.Y - 1; $Host.UI.RawUI
 echo SA Password:********************
 
 :cai
+
+set InstSubDir=%TargetInstance:\=_%
+set JobLogDir=%MaintDBDiskRoot%\%InstSubDir%\JobLogs
+set WmiXmlDir=%MaintDBDiskRoot%\%InstSubDir%\WMI
 
 echo.
 echo ===================
@@ -136,6 +140,10 @@ echo ======================== Modules ========================
 for /f "usebackq eol=# tokens=1,2 delims==" %%a in (`type "%ModulesPath%\config.ini"`) do call :process_one_module "%%a" "%%b"
 
 echo.
+echo ======================== Jobs ========================
+for /f "usebackq eol=# tokens=1,2 delims==" %%a in (`type "%JobsPath%\config.ini"`) do call :process_one_job "%%a" "%%b"
+
+echo.
 echo %date% %time% All finished.
 
 :end
@@ -148,4 +156,12 @@ echo %date% %time% BEGIN module installation: [%~1]
 sqlcmd -S %TargetInstance% %AuthOption% -b -i "%ModulesPath%\%~1.sql"
 if %errorlevel% neq 0 goto end
 echo %date% %time% END module installation: [%~1]
+goto :eof
+
+:process_one_job
+if [%~2] neq [1] goto :eof
+echo %date% %time% BEGIN job installation: [%~1]
+sqlcmd -S %TargetInstance% %AuthOption% -b -i "%JobsPath%\%~1.sql"
+if %errorlevel% neq 0 goto end
+echo %date% %time% END job installation: [%~1]
 goto :eof

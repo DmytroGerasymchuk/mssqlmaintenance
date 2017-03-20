@@ -75,43 +75,68 @@ create table base.tblIndividualBackupSetting (
 )
 go
 
+set noexec off
+print 'NOEXEC is now set to OFF...'
+go
+
+if exists (select 1 from sys.procedures where schema_name(schema_id)='base' and name='usp_prepare_object_creation')
+	execute ('drop procedure base.usp_prepare_object_creation')
+go
+
 create procedure base.usp_prepare_object_creation
 	@SchemaName varchar(255),
-	@ObjectName varchar(255) as
+	@ObjectName varchar(255),
+	@Verbose bit = 0 as
 
 begin
 
-	declare @ObjType varchar(2) =
-		(
-			select rtrim(O.type)
-			from sys.objects O
-			where schema_name(o.schema_id)=@SchemaName and O.name=@ObjectName
-		)
+	declare @Cmd varchar(max)
 
-	declare @FullName varchar(max) = '[' + @SchemaName + '].[' + @ObjectName + ']'
-
-	if @ObjType is not null
+	if exists (select * from sys.schemas where name=@SchemaName)
 		begin
-			print 'Object ' + @FullName + ' already exists. It will be dropped first.'
-			declare @Cmd varchar(max)
-			set @Cmd = 
-				'drop ' +
-				case @ObjType
-					when 'U' then 'table'
-					when 'P' then 'procedure'
-					when 'FN' then 'function' -- scalar function
-					when 'IF' then 'function' -- in-line table-function
-					when 'TF' then 'function' -- table function
-				end +
-				' ' + @FullName
+			if @Verbose=convert(bit, -1)
+				print @SchemaName + ' schema already exists.'
+		end
+	else
+		begin
+			if @Verbose=convert(bit, -1)
+				print @SchemaName + ' schema does not exist - creating...'
+			set @Cmd = 'create schema [' + @SchemaName + ']'
 			execute (@Cmd)
 		end
 
-end
-go
+	if @ObjectName is not null
+		begin
 
-set noexec off
-print 'NOEXEC is now set to OFF...'
+			declare @ObjType varchar(2) =
+				(
+					select rtrim(O.type)
+					from sys.objects O
+					where schema_name(o.schema_id)=@SchemaName and O.name=@ObjectName
+				)
+
+			declare @FullName varchar(max) = '[' + @SchemaName + '].[' + @ObjectName + ']'
+
+			if @ObjType is not null
+				begin
+					if @Verbose=convert(bit, -1)
+						print 'Object ' + @FullName + ' already exists. It will be dropped first.'
+					set @Cmd = 
+						'drop ' +
+						case @ObjType
+							when 'U' then 'table'
+							when 'P' then 'procedure'
+							when 'FN' then 'function' -- scalar function
+							when 'IF' then 'function' -- in-line table-function
+							when 'TF' then 'function' -- table function
+						end +
+						' ' + @FullName
+					execute (@Cmd)
+				end
+
+		end
+
+end
 go
 
 execute base.usp_prepare_object_creation 'base', 'udf_errmsg'
@@ -224,7 +249,9 @@ go
 
 create procedure base.usp_for_each_db
 	@Pattern varchar(max),
-	@Stmt nvarchar(max) as
+	@Stmt nvarchar(max),
+	@SkipReadOnly bit = 0,
+	@UseReplaceInsteadParametrization bit = 0 as
 	
 begin
 
@@ -255,6 +282,23 @@ begin
 			end
 		set nocount off
 
+		if @SkipReadOnly=convert(bit, -1)
+			begin
+				set nocount on
+				delete from DBF
+				from
+					@DBFilter DBF
+				where
+					databasepropertyex(DBF.dbname, 'Updateability')='READ_ONLY'
+				if @@rowcount<>0
+					begin
+						print 'Some READ_ONLY databases were detected.'
+						print 'They will be skipped.'
+						print ''
+					end
+				set nocount off
+			end
+
 		print 'List of the affected databases:'
 		print ''
 		set nocount on
@@ -264,15 +308,25 @@ begin
 		declare DBNames cursor local fast_forward for
 			select dbname from @DBFilter order by 1
 			
-		declare @CurDBName varchar(255)
+		declare @CurDBName varchar(255), @FirstInList bit = convert(bit, -1)
 		
 		open DBNames
 		fetch next from DBNames into @CurDBName
 		
 		while @@fetch_status=0
 			begin
-				print 'Command: ' + @Stmt + '; @DBName=' + @CurDBName
-				execute sp_executesql @Stmt, N'@DBName varchar(255)', @CurDBName
+				declare @OutStr varchar(max) = convert(varchar, getdate(), 120) + ' Command: ' + @Stmt + '; @DBName=' + @CurDBName
+				if @FirstInList=convert(bit, -1) set @FirstInList = convert(bit, 0)	else print ''
+				print replicate('-', len(@OutStr))
+				print @OutStr
+				print replicate('-', len(@OutStr))
+				if @UseReplaceInsteadParametrization = convert(bit, 0)
+					execute sp_executesql @Stmt, N'@DBName varchar(255)', @CurDBName
+				else
+					begin
+						declare @PrepStmt varchar(max) = replace(@Stmt, '@DBName', @CurDBName)
+						execute (@PrepStmt)
+					end
 				fetch next from DBNames into @CurDBName
 			end
 			
@@ -316,4 +370,7 @@ begin
 		)
 
 end
+go
+
+execute base.usp_update_module_info 'base', 1, 1
 go
