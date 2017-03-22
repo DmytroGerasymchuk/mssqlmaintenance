@@ -344,15 +344,23 @@ begin
 end
 go
 
+execute base.usp_prepare_object_creation 'base', 'udf_get_config_value'
+go
+
+create function base.udf_get_config_value(@BaseConfigValueName varchar(255))
+returns varchar(255) as
+begin
+	return (select strValue from base.tblConfigValue where strConfigValueName=@BaseConfigValueName)
+end
+go
+
 execute base.usp_prepare_object_creation 'base', 'udf_get_mail_profile'
 go
 
 create function base.udf_get_mail_profile()
 returns varchar(255) as
 begin
-
-	return (select strValue from base.tblConfigValue where strConfigValueName='base.mail_profile')
-
+	return base.udf_get_config_value('base.mail_profile')
 end
 go
 
@@ -362,15 +370,9 @@ go
 create function base.udf_get_operator_mail(@BaseConfigValueName varchar(255))
 returns varchar(255) as
 begin
-
-	return
-		(
-			select email_address from msdb.dbo.sysoperators where name=
-				(select strValue from base.tblConfigValue where strConfigValueName=@BaseConfigValueName)
-		)
-
+	return (select email_address from msdb.dbo.sysoperators where name=base.udf_get_config_value(@BaseConfigValueName))
 end
 go
 
-execute base.usp_update_module_info 'base', 1, 1
+execute base.usp_update_module_info 'base', 1, 2
 go
