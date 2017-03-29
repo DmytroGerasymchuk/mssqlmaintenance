@@ -144,6 +144,10 @@ echo ======================== Jobs ========================
 for /f "usebackq eol=# tokens=1,2 delims==" %%a in (`type "%JobsPath%\config.ini"`) do call :process_one_job "%%a" "%%b"
 
 echo.
+echo ======================== Initial Actions ========================
+sqlcmd -S %TargetInstance% %AuthOption% -b -Q "execute msdb.dbo.sp_start_job '$(MaintDBName): History Cleanup'"
+
+echo.
 echo %date% %time% All finished.
 
 :end

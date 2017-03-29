@@ -21,11 +21,34 @@ execute base.usp_prepare_object_creation 'maint', 'usp_index_maint'
 go
 
 create procedure maint.usp_index_maint
-	@DBName varchar(255),
+	@DBNamePattern varchar(255),
 	@MinFragPrctToReorg float = 10.0,
 	@MinFragPrctToRebuild float = 30.0,
 	@DisableRecoveryModelSwitching bit = 0,
 	@Verbose bit = 0 as
+begin
+
+	declare @Cmd varchar(max) =
+		'execute maint.int_index_maint @DBName, ' +
+		convert(varchar, @MinFragPrctToReorg) + ', ' +
+		convert(varchar, @MinFragPrctToRebuild) + ', ' +
+		case @DisableRecoveryModelSwitching when convert(bit, 0) then '0' else '1' end + ', ' +
+		case @Verbose when convert(bit, 0) then '0' else '1' end
+
+	execute base.usp_for_each_db @DBNamePattern, @Cmd
+
+end
+go
+
+execute base.usp_prepare_object_creation 'maint', 'int_index_maint'
+go
+
+create procedure maint.int_index_maint
+	@DBName varchar(255),
+	@MinFragPrctToReorg float,
+	@MinFragPrctToRebuild float,
+	@DisableRecoveryModelSwitching bit,
+	@Verbose bit as
 		
 begin
 
@@ -486,16 +509,26 @@ begin
 					@DiffBackupsDetected bit
 
 				set @TXLogsDetected = case
-					when exists (select 1 from @BackupFileList where right([Name], 4)='.trn') then convert(bit, -1)
+					when exists (
+						select 1 from @BackupFileList
+						where
+							[Name] like '%[_]tran.trn' and
+							[Name] >= lower(@DBName) + '_' + convert(varchar, @DelDate, 112) + '_000000_tran.trn'
+					) then convert(bit, -1)
 					else convert(bit, 0) end
 
 				set @DiffBackupsDetected = case
-					when exists (select 1 from @BackupFileList where right([Name], 8)='diff.bak') then convert(bit, -1)
+					when exists (
+						select 1 from @BackupFileList
+						where
+							[Name] like '%[_]diff.bak' and
+							[Name] >= lower(@DBName) + '_' + convert(varchar, @DelDate, 112) + '_000000_diff.bak'
+					) then convert(bit, -1)
 					else convert(bit, 0) end
 
 				if @TXLogsDetected=convert(bit, -1) or @DiffBackupsDetected=convert(bit, -1)
 					begin
-						print 'Transaction log and/or differential backup files were detected in the target directory.'
+						print 'Relevant transaction log and/or differential backup files were detected in the target directory.'
 						print 'Trying to find the last full backup file before @DelDate (' + convert(varchar, @DelDate, 112) + ')...'
 
 						declare @LastFullBackupFileName varchar(255)
@@ -617,5 +650,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'maint', 1, 2
+execute base.usp_update_module_info 'maint', 1, 3
 go
