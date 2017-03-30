@@ -374,5 +374,29 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'base', 1, 2
+execute base.usp_prepare_object_creation 'base', 'udf_to_safe_os_string'
+go
+
+create function base.udf_to_safe_os_string(@SourceString varchar(255))
+returns varchar(255) as
+begin
+
+	declare @SafeOSString varchar(255) = @SourceString
+
+	set @SafeOSString = replace(@SafeOSString, '.', '_')
+	set @SafeOSString = replace(@SafeOSString, '\', '_')
+	set @SafeOSString = replace(@SafeOSString, '/', '_')
+	set @SafeOSString = replace(@SafeOSString, ':', '_')
+	set @SafeOSString = replace(@SafeOSString, '*', '_')
+	set @SafeOSString = replace(@SafeOSString, '?', '_')
+	set @SafeOSString = replace(@SafeOSString, '<', '_')
+	set @SafeOSString = replace(@SafeOSString, '>', '_')
+	set @SafeOSString = replace(@SafeOSString, '|', '_')
+
+	return @SafeOSString
+
+end
+go
+
+execute base.usp_update_module_info 'base', 1, 3
 go
