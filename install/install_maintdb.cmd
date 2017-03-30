@@ -2,14 +2,18 @@
 
 setlocal
 
+for /f "usebackq eol=# tokens=1,2 delims==" %%a in (`type "%~dpn0.ini"`) do (
+	if [%%a]==[MaintDBName] set MaintDBName=%%b
+	if [%%a]==[MaintDBDiskRoot] set MaintDBDiskRoot=%%b
+	if [%%a]==[DBAOperatorMail] set DBAOperatorMail=%%b
+	if [%%a]==[UserJobLogDir] set UserJobLogDir=%%b
+)
+
 set InstPath=%~d0%~p0
 set ModulesPath=%~d0%~p0..\modules
 set JobsPath=%~d0%~p0..\jobs
 
 set DefaultTargetInstance=(local)
-set MaintDBName=MaintDB
-set MaintDBDiskRoot=D:\%MaintDBName%
-set DefaultDBAOperatorMail=sqldba@sandbox.com
 
 echo =============================================
 echo Installation of MSSQL*Maintenance SQL Scripts
@@ -18,10 +22,6 @@ echo =============================================
 echo.
 set /p TargetInstance=Target instance [%DefaultTargetInstance%]:
 if [%TargetInstance%]==[] set TargetInstance=%DefaultTargetInstance%
-
-echo.
-set /P DBAOperatorMail=DBA operator mail [%DefaultDBAOperatorMail%]:
-if [%DBAOperatorMail%]==[] set DBAOperatorMail=%DefaultDBAOperatorMail%
 
 echo.
 echo Choose Authentication:
@@ -59,12 +59,16 @@ echo ===================
 echo.
 echo From path............: %InstPath%
 echo  - Modules...........: %ModulesPath%
+echo  - Jobs..............: %JobsPath%
 echo.
 echo To server............: %TargetInstance%
 echo MaintDB Name.........: %MaintDBName%
 echo Job Log Dir..........: %JobLogDir%
 echo WMI XML Dir..........: %WmiXmlDir%
 echo DBA Operator Mail....: %DBAOperatorMail%
+echo.
+echo User Job Log Dir.....: %UserJobLogDir%
+echo.
 echo Authentication option: %AuthOption%
 echo.
 choice /C YN /M "Proceed"
