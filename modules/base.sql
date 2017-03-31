@@ -187,6 +187,31 @@ begin
 end
 go
 
+execute base.usp_prepare_object_creation 'base', 'udf_csv2table'
+go
+
+create function base.udf_csv2table (@CsvList varchar(max))
+returns @Values table (
+	strValue varchar(255)
+) as
+begin
+
+	declare @X xml =
+		convert(xml,
+			'<Value>' +
+			replace(@CsvList, ',', '</Value><Value>') +
+			'</Value>'
+		)
+
+	insert into @Values
+		select ltrim(rtrim(T.C.value('.', 'varchar(max)')))
+		from @X.nodes('Value') as T(C)
+
+	return
+
+end
+go
+
 execute base.usp_prepare_object_creation 'base', 'udf_expand_dbpattern_raw'
 go
 
@@ -221,18 +246,9 @@ begin
 							from base.tblConfigValue
 							where strConfigValueName='base.database_list'
 
-						declare @X xml =
-							convert(xml,
-								'<Value>' +
-								replace(@ListBody, ',',	'</Value><Value>') +
-								'</Value>'
-							)
 						insert into @DBFilter
-							select name, [state] from sys.databases 
-							where name in (
-								select ltrim(rtrim(T.C.value('.', 'varchar(max)')))
-								from @X.nodes('Value') as T(C)
-							)
+							select SD.[name], SD.[state]
+							from sys.databases SD inner join base.udf_csv2table(@ListBody) L on SD.[name]=L.strValue
 					end
 				else -- only one specific database
 					insert into @DBFilter
@@ -398,5 +414,31 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'base', 1, 3
+execute base.usp_prepare_object_creation 'base', 'usp_set_context'
+go
+
+create procedure base.usp_set_context
+	@Value varchar(128) as
+begin
+
+	declare @BinValue varbinary(128) = cast(@Value as varbinary(128))
+
+	set context_info @BinValue
+
+end
+go
+
+execute base.usp_prepare_object_creation 'base', 'udf_get_context'
+go
+
+create function base.udf_get_context()
+returns varchar(128) as
+begin
+
+	return replace(cast(context_info() as varchar(128)) collate Latin1_General_100_BIN, 0x00, '')
+
+end
+go
+
+execute base.usp_update_module_info 'base', 1, 4
 go
