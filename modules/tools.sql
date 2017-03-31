@@ -600,5 +600,63 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'tools', 1, 1
+execute base.usp_prepare_object_creation 'tools', 'udf_real_win_service_name'
+go
+
+create function tools.udf_real_win_service_name(@FullNameIfDefaultInstance nvarchar(100), @PrefixIfNamedInstance nvarchar(100))
+returns nvarchar(100) as
+begin
+
+	declare @real_service_name nvarchar(100)
+
+    if serverproperty('InstanceName') is not null
+		set @real_service_name = @PrefixIfNamedInstance + N'$' + convert(sysname, serverproperty('InstanceName'))
+    else
+		set @real_service_name = @FullNameIfDefaultInstance
+
+	return @real_service_name
+
+end
+go
+
+execute base.usp_prepare_object_creation 'tools', 'usp_service_info'
+go
+
+create procedure tools.usp_service_info
+	@FullNameIfDefaultInstance nvarchar(100),
+	@PrefixIfNamedInstance nvarchar(100),
+	-- AUSGABE
+	@real_service_name nvarchar(100) output,
+	@auto_start integer output,
+	@startup_account nvarchar(100) output as
+begin
+
+	declare
+		@key nvarchar(200),
+		@RetRes integer
+
+	set @real_service_name = Tools.udf_real_win_service_name(@FullNameIfDefaultInstance, @PrefixIfNamedInstance)
+
+	set @key = N'SYSTEM\CurrentControlSet\Services\' + @real_service_name
+
+    execute @RetRes = master.dbo.xp_regread
+		N'HKEY_LOCAL_MACHINE',
+        @key,
+        N'Start',
+        @auto_start OUTPUT, N'no_output'
+	if @RetRes<>0
+		set @auto_start = 0
+
+    execute @RetRes = master.dbo.xp_regread
+		N'HKEY_LOCAL_MACHINE',
+        @key,
+        N'ObjectName',
+        @startup_account OUTPUT, N'no_output'
+	if @RetRes<>0
+		set @startup_account = '???'
+
+end
+go
+
+execute base.usp_update_module_info 'tools', 1, 2
 go
