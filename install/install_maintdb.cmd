@@ -150,6 +150,11 @@ for /f "usebackq eol=# tokens=1,2 delims==" %%a in (`type "%JobsPath%\config.ini
 echo.
 echo ======================== Initial Actions ========================
 sqlcmd -S %TargetInstance% %AuthOption% -b -Q "execute msdb.dbo.sp_start_job '$(MaintDBName): History Cleanup'"
+if %errorlevel% neq 0 goto end
+sqlcmd -S %TargetInstance% %AuthOption% -b -Q "execute msdb.dbo.sp_start_job '$(MaintDBName): Cycle Error Log'"
+if %errorlevel% neq 0 goto end
+sqlcmd -S %TargetInstance% %AuthOption% -b -Q "execute msdb.dbo.sp_start_job '$(MaintDBName): Check Policies'"
+if %errorlevel% neq 0 goto end
 
 echo.
 echo %date% %time% All finished.
