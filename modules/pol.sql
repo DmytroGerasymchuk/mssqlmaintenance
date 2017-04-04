@@ -1153,8 +1153,8 @@ execute pol.usp_register_policy 14, 'User databases check job',					1, 0, 'usp_p
 execute pol.usp_register_policy 16, 'max degree of parallelism',				1, 0, 'usp_pol_maxdop'
 execute pol.usp_register_policy 17, 'SA account',								1, 0, 'usp_pol_sa_account'
 execute pol.usp_register_policy 18, 'Number of Virtual Log Files',				0, 1, 'usp_pol_vlfnumber',				@EStr2
-execute pol.usp_register_policy 19, 'Housekeeping: orphaned exceptions',		1, 0, 'usp_pol_orphaned_exclusions'
-execute pol.usp_register_policy 20, 'Housekeeping: unneeded exceptions',		1, 0, 'usp_pol_unneeded_exclusions'
+execute pol.usp_register_policy 19, 'Housekeeping: orphaned exclusions',		1, 0, 'usp_pol_orphaned_exclusions'
+execute pol.usp_register_policy 20, 'Housekeeping: unneeded exclusions',		1, 0, 'usp_pol_unneeded_exclusions'
 execute pol.usp_register_policy 21, 'Fatal errors',								1, 0, 'usp_pol_fatal_errors'
 execute pol.usp_register_policy 22, 'Job step log names',						1, 0, 'usp_pol_job_step_log_names'
 execute pol.usp_register_policy 23, 'Job category',								1, 0, 'usp_pol_job_category'
@@ -1168,5 +1168,5 @@ execute pol.usp_register_policy 29, 'Mirroring: Configuration',					0, 0, 'usp_p
 go
 
 
-execute base.usp_update_module_info 'pol', 1, 0
+execute base.usp_update_module_info 'pol', 1, 1
 go
