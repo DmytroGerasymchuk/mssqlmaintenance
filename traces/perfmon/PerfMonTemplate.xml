@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+<DataCollectorSet>
+	<Status>1</Status>
+	<Duration>86340</Duration>
+	<Description>
+	</Description>
+	<DescriptionUnresolved>
+	</DescriptionUnresolved>
+	<DisplayName>
+	</DisplayName>
+	<DisplayNameUnresolved>
+	</DisplayNameUnresolved>
+	<SchedulesEnabled>-1</SchedulesEnabled>
+	<LatestOutputLocation>C:\TEMP\00000000-000000</LatestOutputLocation>
+	<Name>MSSQL Maintenance</Name>
+	<OutputLocation>$$$ROOTPATH$$$\00000000-000000</OutputLocation>
+	<RootPath>$$$ROOTPATH$$$</RootPath>
+	<Segment>0</Segment>
+	<SegmentMaxDuration>0</SegmentMaxDuration>
+	<SegmentMaxSize>0</SegmentMaxSize>
+	<SerialNumber>121</SerialNumber>
+	<Server>
+	</Server>
+	<Subdirectory>
+	</Subdirectory>
+	<SubdirectoryFormat>1</SubdirectoryFormat>
+	<SubdirectoryFormatPattern>yyyyMMdd\-NNNNNN</SubdirectoryFormatPattern>
+	<Task>
+	</Task>
+	<TaskRunAsSelf>0</TaskRunAsSelf>
+	<TaskArguments>
+	</TaskArguments>
+	<TaskUserTextArguments>
+	</TaskUserTextArguments>
+	<UserAccount>SYSTEM</UserAccount>
+	<Security></Security>
+	<StopOnCompletion>0</StopOnCompletion>
+	<PerformanceCounterDataCollector>
+		<DataCollectorType>0</DataCollectorType>
+		<Name>System</Name>
+		<FileName>System</FileName>
+		<FileNameFormat>3</FileNameFormat>
+		<FileNameFormatPattern>
+		</FileNameFormatPattern>
+		<LogAppend>0</LogAppend>
+		<LogCircular>0</LogCircular>
+		<LogOverwrite>0</LogOverwrite>
+		<LatestOutputLocation>C:\TEMP\00000000-000000\System.blg</LatestOutputLocation>
+		<DataSourceName>
+		</DataSourceName>
+		<SampleInterval>60</SampleInterval>
+		<SegmentMaxRecords>0</SegmentMaxRecords>
+		<LogFileFormat>3</LogFileFormat>
+		<Counter>\Memory\Pages/sec</Counter>
+		<Counter>\System\Processor Queue Length</Counter>
+		<Counter>\Processor(*)\% Processor Time</Counter>
+		<Counter>\Memory\Available MBytes</Counter>
+		<Counter>\Network Interface\Bytes Total/sec</Counter>
+		<Counter>\PhysicalDisk(_Total)\% Disk Time</Counter>
+		<Counter>\PhysicalDisk(_Total)\Avg. Disk Queue Length</Counter>
+		<CounterDisplayName>\Memory\Pages/sec</CounterDisplayName>
+		<CounterDisplayName>\System\Processor Queue Length</CounterDisplayName>
+		<CounterDisplayName>\Processor(*)\% Processor Time</CounterDisplayName>
+		<CounterDisplayName>\Memory\Available MBytes</CounterDisplayName>
+		<CounterDisplayName>\Network Interface\Bytes Total/sec</CounterDisplayName>
+		<CounterDisplayName>\PhysicalDisk(_Total)\% Disk Time</CounterDisplayName>
+		<CounterDisplayName>\PhysicalDisk(_Total)\Avg. Disk Queue Length</CounterDisplayName>
+	</PerformanceCounterDataCollector>
+	<PerformanceCounterDataCollector>
+		<DataCollectorType>0</DataCollectorType>
+		<Name>SQLServer</Name>
+		<FileName>SQLServer</FileName>
+		<FileNameFormat>3</FileNameFormat>
+		<FileNameFormatPattern>
+		</FileNameFormatPattern>
+		<LogAppend>0</LogAppend>
+		<LogCircular>0</LogCircular>
+		<LogOverwrite>0</LogOverwrite>
+		<LatestOutputLocation>C:\TEMP\00000000-000000\SQLServer.blg</LatestOutputLocation>
+		<DataSourceName>
+		</DataSourceName>
+		<SampleInterval>60</SampleInterval>
+		<SegmentMaxRecords>0</SegmentMaxRecords>
+		<LogFileFormat>3</LogFileFormat>
+		<Counter>\MSSQL$MSSQLSERVER_XXX:Buffer Manager\Buffer cache hit ratio</Counter>
+		<Counter>\MSSQL$MSSQLSERVER_XXX:Buffer Manager\Page life expectancy</Counter>
+		<Counter>\MSSQL$MSSQLSERVER_XXX:Databases(_Total)\Transactions/sec</Counter>
+		<Counter>\MSSQL$MSSQLSERVER_XXX:General Statistics\User Connections</Counter>
+		<Counter>\MSSQL$MSSQLSERVER_XXX:Memory Manager\Total Server Memory (KB)</Counter>
+		<Counter>\MSSQL$MSSQLSERVER_XXX:SQL Statistics\Batch Requests/sec</Counter>
+		<Counter>\MSSQL$MSSQLSERVER_XXX:SQL Statistics\SQL Compilations/sec</Counter>
+		<Counter>\MSSQL$MSSQLSERVER_XXX:SQL Statistics\SQL Re-Compilations/sec</Counter>
+		<CounterDisplayName>\MSSQL$MSSQLSERVER_XXX:Buffer Manager\Buffer cache hit ratio</CounterDisplayName>
+		<CounterDisplayName>\MSSQL$MSSQLSERVER_XXX:Buffer Manager\Page life expectancy</CounterDisplayName>
+		<CounterDisplayName>\MSSQL$MSSQLSERVER_XXX:Databases(_Total)\Transactions/sec</CounterDisplayName>
+		<CounterDisplayName>\MSSQL$MSSQLSERVER_XXX:General Statistics\User Connections</CounterDisplayName>
+		<CounterDisplayName>\MSSQL$MSSQLSERVER_XXX:Memory Manager\Total Server Memory (KB)</CounterDisplayName>
+		<CounterDisplayName>\MSSQL$MSSQLSERVER_XXX:SQL Statistics\Batch Requests/sec</CounterDisplayName>
+		<CounterDisplayName>\MSSQL$MSSQLSERVER_XXX:SQL Statistics\SQL Compilations/sec</CounterDisplayName>
+		<CounterDisplayName>\MSSQL$MSSQLSERVER_XXX:SQL Statistics\SQL Re-Compilations/sec</CounterDisplayName>
+	</PerformanceCounterDataCollector>
+	<Schedule>
+		<StartDate>01/01/2000</StartDate>
+		<EndDate>
+		</EndDate>
+		<StartTime>
+		</StartTime>
+		<Days>127</Days>
+	</Schedule>
+	<DataManager>
+		<Enabled>-1</Enabled>
+		<CheckBeforeRunning>-1</CheckBeforeRunning>
+		<MinFreeDisk>0</MinFreeDisk>
+		<MaxSize>0</MaxSize>
+		<MaxFolderCount>14</MaxFolderCount>
+		<ResourcePolicy>1</ResourcePolicy>
+		<ReportFileName>report.html</ReportFileName>
+		<RuleTargetFileName>report.xml</RuleTargetFileName>
+		<EventsFileName>
+		</EventsFileName>
+	</DataManager>
+</DataCollectorSet>
