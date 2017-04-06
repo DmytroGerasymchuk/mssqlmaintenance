@@ -8,4 +8,4 @@ Viele der Richtlinien und Best Practices, insbesondere für Installation und ansc
 Im Wesentlichen besteht das Framework aus einer kleinen Wartungs-Datenbank, mit Default-Namen **MaintDB**, welche in jeder Managed-Instanz des SQL Servers eingerichtet wird.
 
 # Detaillierter?
-S. Wiki!
+S. [Wiki](./wiki)!
