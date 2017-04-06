@@ -72,5 +72,55 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'perf', 1, 0
+execute base.usp_prepare_object_creation 'perf', 'usp_mdw_active_user_requests'
+go
+
+create procedure perf.usp_mdw_active_user_requests
+	@When datetime = null,
+	@InstanceName varchar(255) = null,
+	@MDWDBName varchar(255) = 'MDW' as
+begin
+
+	begin try
+
+		set @InstanceName=upper(isnull(@InstanceName, @@servername))
+
+		declare @Cmd nvarchar(max)
+
+		create table #ThisInstanceSnapshots (snapshot_id integer)
+		set @Cmd='select snapshot_id from [' + @MDWDBName + '].core.snapshots where upper(instance_name)=@InstanceName'
+		insert into #ThisInstanceSnapshots execute sp_executesql @Cmd, N'@InstanceName varchar(255)', @InstanceName
+
+		create table #ARSnapshots (snapshot_id integer, snap_time_stamp datetime)
+		set @Cmd='select distinct snapshot_id, snap_time_stamp from [' + @MDWDBName + '].custom_snapshots.active_user_requests'
+		insert into #ARSnapshots execute sp_executesql @Cmd, N'@InstanceName varchar(255)', @InstanceName
+
+		declare @SnapshotId integer =
+			(
+				select top 1 ARS.snapshot_id -- letztmöglicher vor dem angegebenen Auswertungs-Zeitpunkt
+				from
+					#ARSnapshots ARS
+						inner join #ThisInstanceSnapshots TIS on ARS.snapshot_id=TIS.snapshot_id
+				where
+					ARS.snap_time_stamp<=coalesce(@When, getdate())
+				order by
+					ARS.snap_time_stamp desc
+			)
+
+		set @Cmd = 'select * from [' + @MDWDBName + '].custom_snapshots.active_user_requests where snapshot_id=@SnapshotId'
+		execute sp_executesql @Cmd, N'@SnapshotId integer', @SnapshotId
+
+	end try
+
+	begin catch
+		if @@trancount<>0 rollback transaction
+		declare @EM varchar(max) = base.udf_errmsg()
+		print convert(varchar, getdate()) + ' Error encountered!'
+		raiserror(@EM, 16, 1)
+	end catch
+
+end
+go
+
+execute base.usp_update_module_info 'perf', 1, 1
 go
