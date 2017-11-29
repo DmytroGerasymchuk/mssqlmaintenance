@@ -830,7 +830,7 @@ begin
 	if @AllowSharePoint=1
 		begin
 			set nocount on
-			insert into #PolCheckMessages (strPolicyName, strAffectedDBName, strMessage)
+			insert into #Message (strPolicyName, strAffectedDBName, strMessage)
 			select
 				base.udf_get_context(),
 				PE.strValue,
@@ -1168,5 +1168,5 @@ execute pol.usp_register_policy 29, 'Mirroring: Configuration',					0, 0, 'usp_p
 go
 
 
-execute base.usp_update_module_info 'pol', 1, 1
+execute base.usp_update_module_info 'pol', 1, 2
 go
