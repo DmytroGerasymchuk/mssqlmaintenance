@@ -85,13 +85,15 @@ begin
 			_object_id integer,
 			_table_name varchar(255),
 			_index_id integer,
-			_index_name varchar(255)
+			_index_name varchar(255),
+			_allow_page_locks integer
 		)
 
 		set @Cmd = 'use [' + @DBName + ']
 			select
 				so.object_id as _object_id, ''[''+ ss.name + ''].['' + so.name + '']'' as _table_name,
-				si.index_id as _index_id, ''[''+ si.name + '']'' as _index_name
+				si.index_id as _index_id, ''[''+ si.name + '']'' as _index_name,
+				si.allow_page_locks as _allow_page_locks
 			from
 				sys.objects so
 					inner join sys.indexes si on so.object_id = si.object_id 
@@ -106,7 +108,7 @@ begin
 		set nocount off
 
 		declare IndexList cursor local fast_forward for
-			select _object_id, _table_name, _index_id, _index_name
+			select _object_id, _table_name, _index_id, _index_name, _allow_page_locks integer
 			from @IndexList
 			order by _table_name, _index_id
 
@@ -114,71 +116,77 @@ begin
 			@ObjectId integer,
 			@TableName varchar(255),
 			@IndexId integer,
-			@IndexName varchar(255)
+			@IndexName varchar(255),
+			@AllowPageLocks integer
 
 		open IndexList
-		fetch next from IndexList into @ObjectId, @TableName, @IndexId, @IndexName
+		fetch next from IndexList into @ObjectId, @TableName, @IndexId, @IndexName, @AllowPageLocks
 
 		while @@fetch_status=0
 			begin
+				declare OneIndex cursor local fast_forward for  
+					select partition_number, avg_fragmentation_in_percent 
+					from sys.dm_db_index_physical_stats(@DBID, @ObjectId, @IndexId, null, null)
+					order by partition_number
 
-			declare OneIndex cursor local fast_forward for  
-				select partition_number, avg_fragmentation_in_percent 
-				from sys.dm_db_index_physical_stats(@DBID, @ObjectId, @IndexId, null, null)
-				order by partition_number
+				declare
+					@PartitionNumber integer,
+					@FragPrct float
 
-			declare
-				@PartitionNumber integer,
-				@FragPrct float
-
-			open OneIndex
-			fetch next from OneIndex into @PartitionNumber, @FragPrct
-
-			while @@fetch_status = 0
-				begin
-					declare @Msg varchar(max) =
-						convert(varchar, getdate(), 120) + ' ' +
-						'Table: ' + @TableName + ' ' +
-						'Index: ' + @IndexName + ' ' +
-						'Partition#: ' + convert(varchar, @PartitionNumber) + ' ' +
-						'Fragmentation%: ' + convert(varchar, @FragPrct) + ' ' +
-						'Action: '
-
-				declare @Action varchar(255) = 'REBUILD'
-
-				if @FragPrct < @MinFragPrctToReorg -- zu kleine Fragmentierung
-					begin
-						set @Cmd = ''
-						set @Action = 'NONE'
-					end
-				else
-					begin
-						set @Cmd = 'use [' + @DBName + '] alter index ' + @IndexName + ' on ' + @TableName + ' '
-
-						if @FragPrct <  @MinFragPrctToRebuild -- schon ordentlich fragmentiert, aber nicht genug für REBUILD
-							set @Action = 'REORGANIZE'
-
-						if @PartitionNumber > 1
-							set @Action = @Action + ' PARTITION=' + convert(varchar, @PartitionNumber)
-
-						set @Cmd = @Cmd + @Action
-					end
-
-				set @Msg = @Msg + @Action
-
-				if @Verbose=convert(bit, -1) or @Action<>'NONE'
-					print @Msg
-
-				if @Cmd<>''
-					execute (@Cmd)
-
+				open OneIndex
 				fetch next from OneIndex into @PartitionNumber, @FragPrct
-			end
-	
-			deallocate OneIndex
 
-			fetch next from IndexList into @ObjectId, @TableName, @IndexId, @IndexName
-		end
+				while @@fetch_status = 0
+					begin
+						declare @Msg varchar(max) =
+							convert(varchar, getdate(), 120) + ' ' +
+							'Table: ' + @TableName + ' ' +
+							'Index: ' + @IndexName + ' ' +
+							'Partition#: ' + convert(varchar, @PartitionNumber) + ' ' +
+							'Fragmentation%: ' + convert(varchar, @FragPrct) + ' ' +
+							'Action: '
+
+						declare @Action varchar(255) = 'REBUILD'
+
+						if @FragPrct < @MinFragPrctToReorg -- zu kleine Fragmentierung
+							begin
+								set @Cmd = ''
+								set @Action = 'NONE'
+							end
+						else
+							begin
+								set @Cmd = 'use [' + @DBName + '] alter index ' + @IndexName + ' on ' + @TableName + ' '
+
+								if @FragPrct <  @MinFragPrctToRebuild -- schon ordentlich fragmentiert, aber nicht genug für REBUILD
+									set @Action = 'REORGANIZE'
+
+								if @PartitionNumber > 1
+									set @Action = @Action + ' PARTITION=' + convert(varchar, @PartitionNumber)
+
+								set @Cmd = @Cmd + @Action
+							end
+
+						if @Action = 'REORGANIZE' and @AllowPageLocks = 0
+							begin
+								set @Cmd = ''
+								set @Action = 'REORG_ABORT (Reason: ALLOW_PAGE_LOCKS = OFF)'
+							end
+
+						set @Msg = @Msg + @Action
+
+						if @Verbose=convert(bit, -1) or @Action<>'NONE'
+							print @Msg
+
+						if @Cmd<>''
+							execute (@Cmd)
+
+						fetch next from OneIndex into @PartitionNumber, @FragPrct
+					end
+	
+				deallocate OneIndex
+
+				fetch next from IndexList into @ObjectId, @TableName, @IndexId, @IndexName, @AllowPageLocks
+			end
 
 		deallocate IndexList
 
@@ -650,5 +658,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'maint', 1, 3
+execute base.usp_update_module_info 'maint', 1, 4
 go
