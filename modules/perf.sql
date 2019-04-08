@@ -72,6 +72,39 @@ begin
 end
 go
 
+execute base.usp_prepare_object_creation 'perf', 'usp_index_show_usage'
+go
+
+create procedure perf.usp_index_show_usage
+	@DBName varchar(255),
+	@SchemaName varchar(255),
+	@TableName varchar(255) as
+begin
+
+	declare @Cmd nvarchar(max)
+
+	set @Cmd =
+		N'use [' + @DBName + ']
+
+		select
+			coalesce(si.name, si.type_desc) collate database_default as index_name,
+			si.index_id,
+			us.user_seeks, us.user_scans, us.user_lookups, us.user_updates,
+			us.last_user_seek, us.last_user_scan, us.last_user_lookup, us.last_user_update
+		from
+			(select * from sys.dm_db_index_usage_stats where database_id=db_id()) us
+				right join sys.indexes si on us.object_id=si.object_id and us.index_id=si.index_id
+		where
+			si.object_id=object_id(''[' + @SchemaName + '].[' + @TableName+ ']'') and
+			si.is_hypothetical=0
+		order by
+			si.index_id'
+
+	execute (@Cmd)
+
+end
+go
+
 execute base.usp_prepare_object_creation 'perf', 'usp_mdw_active_user_requests'
 go
 
@@ -122,5 +155,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'perf', 1, 1
+execute base.usp_update_module_info 'perf', 1, 2
 go
