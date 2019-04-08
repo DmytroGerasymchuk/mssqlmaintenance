@@ -152,7 +152,7 @@ begin
 				inner join sys.dm_resource_governor_resource_pools RGRP on RGWG.pool_id=RGRP.pool_id
 
 				inner join sys.dm_exec_connections C on S.session_id=C.session_id
-				cross apply sys.dm_exec_sql_text(C.most_recent_sql_handle) as ST
+				outer apply sys.dm_exec_sql_text(C.most_recent_sql_handle) as ST
 	
 				inner join (
 					SELECT
@@ -658,5 +658,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'tools', 1, 2
+execute base.usp_update_module_info 'tools', 1, 3
 go
