@@ -452,5 +452,78 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'jobs', 1, 0
+execute base.usp_prepare_object_creation 'jobs', 'usp_wait_for_completion'
+go
+
+create procedure jobs.usp_wait_for_completion
+	@JobNameLikePattern varchar(255),
+	@MaximumWaitTimeMinutes integer as
+begin
+
+	begin try
+
+		declare JobNames cursor local fast_forward for
+			select [name] from msdb.dbo.sysjobs
+			where [name] like @JobNameLikePattern
+			order by 1
+
+		declare
+			@MaximumWaitTime integer = @MaximumWaitTimeMinutes * 60,
+			@CurrentWaitTime integer = 0
+
+		print convert(varchar, getdate()) + ' Staring wait loop...'
+
+		while @CurrentWaitTime < @MaximumWaitTime
+			begin
+
+				declare
+					@CurJobName varchar(255),
+					@JobsAreRunning integer = 0
+
+				open JobNames
+				fetch next from JobNames into @CurJobName
+
+				while @@fetch_status=0
+					begin
+						declare @Result integer
+						execute @Result = jobs.usp_get_current_job_state @CurJobName
+						if @Result <> 0
+							begin
+								--print convert(varchar, getdate()) + ' Job [' + @CurJobName + '] seems to be running...'
+								set @JobsAreRunning = 1
+								break
+							end
+
+						fetch next from JobNames into @CurJobName
+					end
+
+				close JobNames
+
+				if @JobsAreRunning = 0
+					begin
+						print convert(varchar, getdate()) + ' Nothing is running.'
+						return -- wenn nix läuft, dann sind wir mit dem Warten fertig
+					end
+
+				waitfor delay '00:00:10'
+				set @CurrentWaitTime = @CurrentWaitTime + 10
+
+			end
+
+			-- zu lange gewartet - die Jobs laufen aber immer noch...
+			raiserror('Maximum Wait Time was reached.', 16, 1)
+
+	end try
+
+	begin catch
+		if @@trancount<>0 rollback transaction
+		declare @EM varchar(max) = base.udf_errmsg()
+		print convert(varchar, getdate()) + ' Error encountered!'
+		raiserror(@EM, 16, 1)
+	end catch
+
+end
+go
+
+execute base.usp_update_module_info 'jobs', 1, 1
 go
