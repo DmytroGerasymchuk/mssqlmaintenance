@@ -658,5 +658,94 @@ begin
 end
 go
 
+create procedure tools.usp_mirroring
+	@Operation varchar(255) = 'show' -- show, suspend, resume
+as
+begin
+
+	begin try
+
+		set @Operation = lower(@Operation)
+
+		if @Operation not in ('show', 'suspend', 'resume')
+			raiserror('Unknown operation.', 16, 1)
+
+		set nocount on
+
+		print 'Current mirroring state:'
+		print ''
+		
+		select
+			convert(varchar(30), db_name(database_id)) as [db_name],
+			mirroring_state,
+			convert(varchar(30), mirroring_state_desc) as [mirroring_state_desc]
+		from sys.database_mirroring
+		where mirroring_guid is not null
+		order by 1
+
+		if @Operation = 'show' -- bei "show" ist hier Schluss
+			return
+
+		declare @FromState table (mirroring_state tinyint primary key)
+
+		if @Operation = 'suspend'
+			insert into @FromState values (1), (4), (5), (6) -- Disconnected from other partner; Synchronized; The partners are not synchronized; The partners are synchronized
+		else -- "resume"
+			insert into @FromState values (0) -- Suspended
+
+		print ''
+		print 'Requested operation is: ' + @Operation
+		print ''
+		print 'Databases will be affected with following states:'
+		print ''
+
+		select mirroring_state from @FromState
+
+		declare AffectedDBs cursor local fast_forward for
+			select
+				db_name(database_id) as [db_name]
+			from sys.database_mirroring dm inner join @FromState fs on dm.mirroring_state=fs.mirroring_state
+			where dm.mirroring_guid is not null
+			order by 1
+
+		declare @CurDB varchar(255)
+
+		open AffectedDBs
+		fetch next from AffectedDBs into @CurDB
+
+		while @@fetch_status=0
+			begin
+				declare @Cmd varchar(max) = 'alter database [' + @CurDB + '] set partner ' + @Operation
+				print @Cmd
+				execute (@Cmd)
+				fetch next from AffectedDBs into @CurDB
+			end
+
+		deallocate AffectedDBs
+
+		print ''
+		print 'New mirroring state:'
+		print ''
+		
+		select
+			convert(varchar(30), db_name(database_id)) as [db_name],
+			mirroring_state,
+			convert(varchar(30), mirroring_state_desc) as [mirroring_state_desc]
+		from sys.database_mirroring
+		where mirroring_guid is not null
+		order by 1
+
+	end try
+
+	begin catch
+		if @@trancount<>0 rollback transaction
+		declare @EM varchar(max) = base.udf_errmsg()
+		print convert(varchar, getdate()) + ' Error encountered!'
+		raiserror(@EM, 16, 1)
+	end catch
+
+end
+go
+
 execute base.usp_update_module_info 'maint', 1, 4
 go
