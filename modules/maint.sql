@@ -658,5 +658,149 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'maint', 1, 4
+execute base.usp_prepare_object_creation 'maint', 'int_log_shrink'
+go
+
+create procedure maint.int_log_shrink
+	@DBName varchar(255),
+	@MaxLogSize integer as
+	
+begin
+
+	begin try
+	
+		declare	@Cmd nvarchar(max)
+	
+		create table #LogFiles (name varchar(255))
+		
+		set @Cmd =
+			'use [' + @DBName + '] ' +
+			'insert into #LogFiles select name from sys.database_files ' +
+			'where type=1'
+		set nocount on
+		execute (@Cmd)
+		set nocount off
+
+		declare LogFiles cursor local for
+			select name from #LogFiles order by 1
+			
+		declare @CurFileName varchar(255)
+		
+		open LogFiles
+		fetch next from LogFiles into @CurFileName
+
+		set @Cmd = 'use [' + @DBName + '] dbcc shrinkfile(@FileName, ' + convert(varchar, @MaxLogSize) + ')'
+		
+		while @@fetch_status=0
+			begin
+				print 'Command: ' + @Cmd + '; @FileName=' + @CurFileName
+				execute sp_executesql @Cmd, N'@FileName varchar(255)', @CurFileName
+				fetch next from LogFiles into @CurFileName
+			end
+			
+		deallocate LogFiles
+	
+		drop table #LogFiles
+			
+	end try
+
+	begin catch
+		if object_id('tempdb..#LogFiles') is not null
+			drop table #LogFiles
+
+		if @@trancount<>0 rollback transaction
+		declare @EM varchar(max) = base.udf_errmsg()
+		print convert(varchar, getdate()) + ' Error encountered!'
+		raiserror(@EM, 16, 1)
+	end catch
+	
+end
+go
+
+execute base.usp_prepare_object_creation 'maint', 'usp_log_shrink'
+go
+
+create procedure maint.usp_log_shrink
+	@Pattern varchar(max),
+	@MaxLogFileSize integer as
+	
+begin
+
+	begin try
+
+		if @MaxLogFileSize is null
+			raiserror('The configuration value Maintenance.MaxLogSize was not found.', 16, 1)
+
+		declare @Stmt nvarchar(max) = 'execute maint.int_log_shrink @DBName, ' + convert(varchar, @MaxLogFileSize)
+
+		execute base.usp_for_each_db @Pattern, @Stmt, @SkipReadOnly = 1
+		
+	end try
+
+	begin catch
+		if @@trancount<>0 rollback transaction
+		declare @EM varchar(max) = base.udf_errmsg()
+		print convert(varchar, getdate()) + ' Error encountered!'
+		raiserror(@EM, 16, 1)
+	end catch
+		
+end
+go
+
+execute base.usp_prepare_object_creation 'maint', 'usp_log_shrink_force_one_db'
+go
+
+create procedure maint.usp_log_shrink_force_one_db
+	@DBName varchar(255),
+	@MaxLogFileSize integer as
+	
+begin
+
+	begin try
+
+		declare @VLFNumber integer
+
+		print 'Processing database: ' + @DBName
+
+		execute @VLFNumber = Tools.usp_get_vlf_number @DBName
+		print ''
+		print 'Number of VLFs before: ' + convert(varchar, @VLFNumber)
+
+		-- try to reduce log size
+		-- this may bring nothing, if any VLF is active outside of the target log size
+		print ''
+		print 'Attempting to shrink transaction log files for the 1st time...'
+		print ''
+		execute maint.int_log_shrink @DBName, @MaxLogFileSize
+
+		-- back up transaction log to ensure that possibly active VLF at the
+		-- end of TX log is empty and does not block log shrinking
+		print ''
+		print 'Enforcing log backup...'
+		print ''
+		execute maint.usp_backup @DBName, 'T'
+
+		-- try to reduce log size again
+		print ''
+		print 'Attempting to shrink transaction log files for the 2nd time...'
+		print ''
+		execute maint.int_log_shrink @DBName, @MaxLogFileSize
+
+		execute @VLFNumber = Tools.usp_get_vlf_number @DBName
+		print ''
+		print 'Number of VLFs after: ' + convert(varchar, @VLFNumber)
+
+	end try
+
+	begin catch
+		if @@trancount<>0 rollback transaction
+		declare @EM varchar(max) = base.udf_errmsg()
+		print convert(varchar, getdate()) + ' Error encountered!'
+		raiserror(@EM, 16, 1)
+	end catch
+		
+end
+go
+
+execute base.usp_update_module_info 'maint', 1, 5
 go
