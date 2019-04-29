@@ -721,7 +721,7 @@ execute base.usp_prepare_object_creation 'maint', 'usp_log_shrink'
 go
 
 create procedure maint.usp_log_shrink
-	@Pattern varchar(max),
+	@DBNamePattern varchar(max),
 	@MaxLogFileSize integer as
 	
 begin
@@ -733,7 +733,7 @@ begin
 
 		declare @Stmt nvarchar(max) = 'execute maint.int_log_shrink @DBName, ' + convert(varchar, @MaxLogFileSize)
 
-		execute base.usp_for_each_db @Pattern, @Stmt, @SkipReadOnly = 1
+		execute base.usp_for_each_db @DBNamePattern, @Stmt, @SkipReadOnly = 1
 		
 	end try
 
