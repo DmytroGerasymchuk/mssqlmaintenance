@@ -750,5 +750,75 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'tools', 1, 4
+execute base.usp_prepare_object_creation 'tools', 'usp_perm_info'
+go
+
+create procedure tools.usp_perm_info
+	@DBName varchar(255),
+	@PrincipalName varchar(255),
+	@SchemaNamePattern varchar(255) = '%',
+	@ObjectNamePattern varchar(255) = '%',
+	@ObjectTypePattern varchar(255) = '%',
+	@PermissionNamePattern varchar(255) = '%',
+	@PermissionStatePattern varchar(255) = '%',
+	@SuppressConnectPermission bit = 0,
+	@SuppressToClauseInPermissionSql bit = 0
+as
+begin
+
+	if @DBName like '%--%' or @DBName like '%/*%'
+		begin
+			raiserror('Invalid characters in @DBName parameter.', 16, 1)
+			return
+		end
+
+	declare @Cmd nvarchar(max) = '
+	use [' + @DBName + ']
+
+	select
+		coalesce(schema_name(so.schema_id), ''DATABASE'') as [schema],
+		coalesce(so.[name], db_name()) as [name],
+		coalesce(so.type_desc, ''DATABASE'') as [type],
+		dbp.permission_name,
+		dbp.state_desc as permission_state,
+		case when dbp.state_desc like ''GRANT%'' then ''GRANT'' else dbp.state_desc end + '' '' +
+			dbp.permission_name + case dbp.class when 0 then '''' else '' on ['' + schema_name(so.schema_id) + ''].['' + so.[name] + '']'' end +
+			' + case when @SuppressToClauseInPermissionSql=convert(bit, 0) then ''' to ['' + dp.name + '']'' +' else '' end + '
+			case dbp.state when ''W'' then '' WITH GRANT OPTION'' else '''' end
+			collate SQL_Latin1_General_CP1_CI_AS as permission_sql
+	from
+		sys.database_principals dp
+			inner join sys.database_permissions dbp on dp.principal_id=dbp.grantee_principal_id
+			left join sys.objects so on dbp.major_id=so.object_id and so.[name] not in (''syspriorities'')
+	where
+		dp.[name]=@Principal
+	'
+
+	declare @Result table
+		(
+			[schema] sysname,
+			[name] sysname,
+			[type] nvarchar(60),
+			[permission_name] nvarchar(128),
+			[permission_state] nvarchar(60),
+			[permission_sql] varchar(255)
+		)
+
+	insert into @Result
+		execute sp_executesql @Cmd, N'@Principal varchar(255)', @Principal=@PrincipalName
+
+	select *
+	from @Result r
+	where
+		r.[schema] like @SchemaNamePattern and
+		r.[name] like @ObjectNamePattern and
+		r.[type] like @ObjectTypePattern and
+		r.[permission_name] like @PermissionNamePattern and
+		r.[permission_state] like @PermissionStatePattern and
+		(@SuppressConnectPermission=convert(bit, 0) or (@SuppressConnectPermission=convert(bit, -1) and not (r.[type]='DATABASE' and r.[permission_name]='CONNECT')))
+
+end
+go
+
+execute base.usp_update_module_info 'tools', 1, 5
 go
