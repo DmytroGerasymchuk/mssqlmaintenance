@@ -457,14 +457,15 @@ go
 
 create procedure jobs.usp_wait_for_completion
 	@JobNameLikePattern varchar(255),
-	@MaximumWaitTimeMinutes integer as
+	@MaximumWaitTimeMinutes integer,
+	@SelfId uniqueidentifier = null as
 begin
 
 	begin try
 
 		declare JobNames cursor local fast_forward for
 			select [name] from msdb.dbo.sysjobs
-			where [name] like @JobNameLikePattern
+			where [name] like @JobNameLikePattern and ((@SelfId is null) or (@SelfId is not null and [job_id]<>@SelfId))
 			order by 1
 
 		declare
@@ -525,5 +526,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'jobs', 1, 1
+execute base.usp_update_module_info 'jobs', 1, 2
 go
