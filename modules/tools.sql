@@ -662,7 +662,7 @@ execute base.usp_prepare_object_creation 'tools', 'usp_mirroring'
 go
 
 create procedure tools.usp_mirroring
-	@Operation varchar(255) = 'show' -- show, suspend, resume
+	@Operation varchar(255) = 'show' -- show, suspend, resume, failover, force_service_allow_data_loss
 as
 begin
 
@@ -670,7 +670,7 @@ begin
 
 		set @Operation = lower(@Operation)
 
-		if @Operation not in ('show', 'suspend', 'resume')
+		if @Operation not in ('show', 'suspend', 'resume', 'failover', 'force_service_allow_data_loss')
 			raiserror('Unknown operation.', 16, 1)
 
 		set nocount on
@@ -681,7 +681,9 @@ begin
 		select
 			convert(varchar(30), db_name(database_id)) as [db_name],
 			mirroring_state,
-			convert(varchar(30), mirroring_state_desc) as [mirroring_state_desc]
+			convert(varchar(20), mirroring_state_desc) as [mirroring_state_desc],
+			mirroring_role,
+			convert(varchar(20), mirroring_role_desc) as [mirroring_role_desc]
 		from sys.database_mirroring
 		where mirroring_guid is not null
 		order by 1
@@ -690,24 +692,48 @@ begin
 			return
 
 		declare @FromState table (mirroring_state tinyint primary key)
+		declare @MirroringRole table (mirroring_role tinyint primary key)
 
 		if @Operation = 'suspend'
-			insert into @FromState values (1), (4), (5), (6) -- Disconnected from other partner; Synchronized; The partners are not synchronized; The partners are synchronized
-		else -- "resume"
-			insert into @FromState values (0) -- Suspended
+			begin
+				insert into @FromState values (1), (4), (5), (6) -- Disconnected from other partner; Synchronized; The partners are not synchronized; The partners are synchronized
+				insert into @MirroringRole values (1), (2) -- Principal, Mirror
+			end
+
+		if @Operation = 'resume'
+			begin
+				insert into @FromState values (0) -- Suspended
+				insert into @MirroringRole values (1) -- Principal
+			end
+
+		if @Operation = 'failover'
+			begin
+				insert into @FromState values (4), (6) -- Synchronized; The partners are synchronized
+				insert into @MirroringRole values (1) -- Principal
+			end
+
+		if @Operation = 'force_service_allow_data_loss'
+			begin
+				insert into @FromState values (0), (1), (4), (5), (6) -- Suspended; Disconnected from other partner; Synchronized; The partners are not synchronized; The partners are synchronized
+				insert into @MirroringRole values (2) -- Mirror
+			end
 
 		print ''
 		print 'Requested operation is: ' + @Operation
 		print ''
-		print 'Databases will be affected with following states:'
+		print 'Databases will be affected with following settings:'
 		print ''
 
 		select mirroring_state from @FromState
+		select mirroring_role from @MirroringRole
 
 		declare AffectedDBs cursor local fast_forward for
 			select
 				db_name(database_id) as [db_name]
-			from sys.database_mirroring dm inner join @FromState fs on dm.mirroring_state=fs.mirroring_state
+			from
+				sys.database_mirroring dm
+					inner join @FromState fs on dm.mirroring_state=fs.mirroring_state
+					inner join @MirroringRole mr on dm.mirroring_role=mr.mirroring_role
 			where dm.mirroring_guid is not null
 			order by 1
 
@@ -718,7 +744,7 @@ begin
 
 		while @@fetch_status=0
 			begin
-				declare @Cmd varchar(max) = 'alter database [' + @CurDB + '] set partner ' + @Operation
+				declare @Cmd varchar(max) = 'use [master] alter database [' + @CurDB + '] set partner ' + @Operation
 				print @Cmd
 				execute (@Cmd)
 				fetch next from AffectedDBs into @CurDB
@@ -733,7 +759,9 @@ begin
 		select
 			convert(varchar(30), db_name(database_id)) as [db_name],
 			mirroring_state,
-			convert(varchar(30), mirroring_state_desc) as [mirroring_state_desc]
+			convert(varchar(20), mirroring_state_desc) as [mirroring_state_desc],
+			mirroring_role,
+			convert(varchar(20), mirroring_role_desc) as [mirroring_role_desc]
 		from sys.database_mirroring
 		where mirroring_guid is not null
 		order by 1
@@ -820,5 +848,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'tools', 1, 5
+execute base.usp_update_module_info 'tools', 1, 6
 go
