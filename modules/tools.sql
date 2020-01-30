@@ -804,20 +804,20 @@ begin
 	use [' + @DBName + ']
 
 	select
-		coalesce(schema_name(so.schema_id), ''DATABASE'') as [schema],
-		coalesce(so.[name], db_name()) as [name],
-		coalesce(so.type_desc, ''DATABASE'') as [type],
+		coalesce(schema_name(so.schema_id), dbp.class_desc) as [schema],
+		coalesce(so.[name], case dbp.class when 0 then db_name() else schema_name(dbp.major_id) end) as [name],
+		coalesce(so.type_desc, dbp.class_desc) as [type],
 		dbp.permission_name,
 		dbp.state_desc as permission_state,
 		case when dbp.state_desc like ''GRANT%'' then ''GRANT'' else dbp.state_desc end + '' '' +
-			dbp.permission_name + case dbp.class when 0 then '''' else '' on ['' + schema_name(so.schema_id) + ''].['' + so.[name] + '']'' end +
+			dbp.permission_name + case dbp.class when 0 then '''' when 1 then '' on ['' + schema_name(so.schema_id) + ''].['' + so.[name] + '']'' else '' on '' + dbp.class_desc + ''::['' + schema_name(dbp.major_id) + '']'' end +
 			' + case when @SuppressToClauseInPermissionSql=convert(bit, 0) then ''' to ['' + dp.name + '']'' +' else '' end + '
 			case dbp.state when ''W'' then '' WITH GRANT OPTION'' else '''' end
 			collate SQL_Latin1_General_CP1_CI_AS as permission_sql
 	from
 		sys.database_principals dp
 			inner join sys.database_permissions dbp on dp.principal_id=dbp.grantee_principal_id
-			left join sys.objects so on dbp.major_id=so.object_id and so.[name] not in (''syspriorities'')
+			left join sys.objects so on dbp.major_id=so.object_id and dbp.class=1
 	where
 		dp.[name]=@Principal
 	'
@@ -848,5 +848,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'tools', 1, 6
+execute base.usp_update_module_info 'tools', 1, 7
 go
