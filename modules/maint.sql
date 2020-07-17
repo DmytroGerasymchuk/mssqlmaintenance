@@ -35,7 +35,7 @@ begin
 		case @DisableRecoveryModelSwitching when convert(bit, 0) then '0' else '1' end + ', ' +
 		case @Verbose when convert(bit, 0) then '0' else '1' end
 
-	execute base.usp_for_each_db @DBNamePattern, @Cmd
+	execute base.usp_for_each_db @DBNamePattern, @Cmd, 1 -- Skip Read-Only
 
 end
 go
@@ -802,5 +802,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'maint', 1, 5
+execute base.usp_update_module_info 'maint', 1, 6
 go
