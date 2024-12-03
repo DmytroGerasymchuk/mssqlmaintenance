@@ -88,6 +88,70 @@ order by 1, 2, P.partition_number'
 end
 go
 
+execute base.usp_prepare_object_creation 'tools', 'usp_db_object_storage_info'
+go
+
+create procedure tools.usp_db_object_storage_info
+	@DBName varchar(255)
+with execute as caller as
+begin
+
+	declare @Cmd nvarchar(max)
+
+	set @Cmd = '
+use [' + @DBName + ']
+select
+	SS.name as [schema],
+	ST.name as [table],
+	case SI.index_id
+		when 0 then ''Heap''
+		when 1 then ''Clustered''
+		else ''Index''
+	end as index_type,
+	SI.name as index_name,
+	P.partition_number,
+	nullif(P.data_compression_desc, ''NONE'') as data_compression,
+	C.name as part_column_name,
+	case
+		when PF.name is null then null
+		else case PF.boundary_value_on_right when 1 then ''<'' else ''<='' end
+	end as part_comparison,
+	RV.value as part_value,
+	coalesce(FG1.name, FG2.name) as [filegroup],
+	P.rows
+from
+	sys.tables ST
+		inner join sys.schemas SS on ST.schema_id=SS.schema_id
+		inner join sys.indexes SI on ST.object_id=SI.object_id --and SI.index_id<2 -- only heaps or clustered indexes
+		inner join sys.data_spaces DS on SI.data_space_id=DS.data_space_id
+
+		inner join sys.partitions P on ST.object_id=P.object_id and SI.index_id=P.index_id --and P.index_id<2 -- only heaps or clustered indexes
+
+		left join sys.index_columns IC on
+			SI.object_id=IC.object_id and
+			SI.index_id=IC.index_id and
+			IC.partition_ordinal=1
+		left join sys.columns C on
+			IC.object_id=C.object_id and
+			IC.column_id=C.column_id
+
+		left join sys.partition_schemes PS on DS.data_space_id=PS.data_space_id
+		left join sys.partition_functions PF on PS.function_id=PF.function_id
+		left join sys.partition_range_values RV on
+			PF.function_id=RV.function_id and P.partition_number=RV.boundary_id
+
+		left join sys.filegroups FG1 on DS.data_space_id=FG1.data_space_id
+
+		left join sys.destination_data_spaces DDS on
+			DDS.partition_scheme_id=PS.data_space_id and DDS.destination_id=P.partition_number
+		left join sys.filegroups FG2 on DDS.data_space_id=FG2.data_space_id
+order by 1, 2, SI.index_id, SI.[name], P.partition_number'
+
+	execute (@Cmd)
+
+end
+go
+
 execute base.usp_prepare_object_creation 'tools', 'usp_who3'
 go
 
@@ -848,5 +912,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'tools', 1, 7
+execute base.usp_update_module_info 'tools', 1, 8
 go
