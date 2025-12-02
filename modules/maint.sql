@@ -125,8 +125,10 @@ begin
 		while @@fetch_status=0
 			begin
 				declare OneIndex cursor local fast_forward for  
-					select partition_number, avg_fragmentation_in_percent 
+					-- there may be multiple entries per partition, for example in columnstore indices
+					select partition_number, max(avg_fragmentation_in_percent) as avg_fragmentation_in_percent 
 					from sys.dm_db_index_physical_stats(@DBID, @ObjectId, @IndexId, null, null)
+					group by partition_number
 					order by partition_number
 
 				declare
@@ -802,5 +804,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'maint', 1, 6
+execute base.usp_update_module_info 'maint', 1, 7
 go
