@@ -125,18 +125,19 @@ begin
 		while @@fetch_status=0
 			begin
 				declare OneIndex cursor local fast_forward for  
-					-- there may be multiple entries per partition, for example in columnstore indices
-					select partition_number, max(avg_fragmentation_in_percent) as avg_fragmentation_in_percent 
+					select distinct -- there may be multiple entries per partition, for example in columnstore indices
+						partition_number,
+						max(avg_fragmentation_in_percent) over (partition by partition_number) as avg_fragmentation_in_percent,
+						max(partition_number) over () as partition_count
 					from sys.dm_db_index_physical_stats(@DBID, @ObjectId, @IndexId, null, null)
-					group by partition_number
-					order by partition_number
 
 				declare
 					@PartitionNumber integer,
-					@FragPrct float
+					@FragPrct float,
+					@PartitionCount int
 
 				open OneIndex
-				fetch next from OneIndex into @PartitionNumber, @FragPrct
+				fetch next from OneIndex into @PartitionNumber, @FragPrct, @PartitionCount
 
 				while @@fetch_status = 0
 					begin
@@ -162,7 +163,7 @@ begin
 								if @FragPrct <  @MinFragPrctToRebuild -- schon ordentlich fragmentiert, aber nicht genug für REBUILD
 									set @Action = 'REORGANIZE'
 
-								if @PartitionNumber > 1
+								if @PartitionCount > 1 -- Index ist partitionert, daher immer Partition-Number angeben!
 									set @Action = @Action + ' PARTITION=' + convert(varchar, @PartitionNumber)
 
 								set @Cmd = @Cmd + @Action
@@ -182,7 +183,7 @@ begin
 						if @Cmd<>''
 							execute (@Cmd)
 
-						fetch next from OneIndex into @PartitionNumber, @FragPrct
+						fetch next from OneIndex into @PartitionNumber, @FragPrct, @PartitionCount
 					end
 	
 				deallocate OneIndex
@@ -804,5 +805,5 @@ begin
 end
 go
 
-execute base.usp_update_module_info 'maint', 1, 7
+execute base.usp_update_module_info 'maint', 1, 8
 go
